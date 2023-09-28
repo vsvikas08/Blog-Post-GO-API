@@ -1,30 +1,39 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func main() {
-	// db, err := sql.Open("mysql","root:@tcp(localhost:3306)/go_blog")
+func GetAllPost(c *gin.Context) {
 	db := getDBInstance().db
-	// if err != nil {
-	// 	fmt.Println("Error", err)
-	// 	return
-	// }
+	data, err := db.Query("SELECT * FROM blog")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message" : "Database error"})
+		return
+	}
+	var posts []Post
+	for data.Next() {
+		var post Post
+		err = data.Scan(&post.Id, &post.Author, &post.Date, &post.Title, &post.Content)
+		if err != nil {
+			fmt.Println("Error in reading post : ",err)
+			continue
+		}
+		posts = append(posts, post)
+	}
+	c.JSON(http.StatusAccepted, gin.H{"data": posts})
+}
+func main() {
+	db := getDBInstance().db
 	defer db.Close()
 
-	// data, err := db.Query("select * from blog")
-	// if err != nil {
-	// 	fmt.Println("Error",err)
-	// 	return
-	// }
-	// for data.Next() {
-	// 	var post Post
-	// 	err = data.Scan(&post.Id, &post.Title, &post.Date, &post.Author, &post.Content)
-	// 	if err != nil {
-	// 		fmt.Println("Error : ",err)
-	// 		return
-	// 	}
-	// 	fmt.Println(post)
-	// }
+	r := gin.Default()
+
+	r.GET("/post", GetAllPost)
+
+	r.Run(":8000")
 }

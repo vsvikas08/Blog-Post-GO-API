@@ -72,6 +72,32 @@ func CreateNewPost(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, gin.H{"data" : data})
 }
+func DeletePostByID(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message" : "No ID to delete record."})
+		return
+	}
+	db := getDBInstance().db
+	// check data exist or not
+	query := fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM blog WHERE post_id = %s)",id)
+	row := db.QueryRow(query)
+	var exists bool
+	row.Scan((&exists))
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"message" : "ID does not exist"})
+		return
+	}
+	// delete data
+	_, err := db.Query("DELETE FROM blog WHERE post_id = ?",id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message" : "Id does not exist."})
+		return
+	}
+	
+	msg := fmt.Sprintf("id = %s deleted",id)
+	c.JSON(http.StatusOK, gin.H{"message" : msg})
+}
 func main() {
 	db := getDBInstance().db
 	defer db.Close()
@@ -81,6 +107,7 @@ func main() {
 	r.GET("/post", GetAllPost)
 	r.GET("/post/:id", GetPostByID)
 	r.POST("/post", CreateNewPost)
+	r.DELETE("/post/:id", DeletePostByID)
 
 	r.Run(":8000")
 }

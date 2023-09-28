@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -18,7 +20,7 @@ func GetAllPost(c *gin.Context) {
 	var posts []Post
 	for data.Next() {
 		var post Post
-		err = data.Scan(&post.Id, &post.Author, &post.Date, &post.Title, &post.Content)
+		err = data.Scan(&post.Id, &post.Title, &post.Author, &post.Date, &post.Content)
 		if err != nil {
 			fmt.Println("Error in reading post : ",err)
 			continue
@@ -36,12 +38,39 @@ func GetPostByID(c *gin.Context) {
 		return
 	}
 	var post Post
-	err := db.QueryRow("SELECT * FROM blog WHERE post_id = ?",id).Scan(&post.Id,&post.Date,&post.Author,&post.Title,&post.Content)
+	err := db.QueryRow("SELECT * FROM blog WHERE post_id = ?",id).Scan(&post.Id,&post.Title,&post.Author,&post.Date,&post.Content)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message" : "Post doesn't exist."})
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"data" : post})
+	c.JSON(http.StatusOK, gin.H{"data" : post})
+}
+func CreateNewPost(c *gin.Context) {
+	reqBody, _ := c.GetRawData()
+	var post Post
+	if err := json.Unmarshal(reqBody,&post); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message" : "Post data is not valid"})
+		return
+	}
+	if post.Title == "" || post.Author == "" || post.Content == "" || post.Date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message" : "Field is missing"})
+		return
+	}
+	db := getDBInstance().db
+	query := "INSERT INTO `blog` (`post_title`,`post_author`,`post_date`,`post_content`) VALUES (?,?,?,?)"
+	insert, err := db.ExecContext(context.Background(), query,post.Title,post.Author,post.Date,post.Content)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message" : "Server error"})
+		return
+	}
+	var data Post
+	id,_ := insert.LastInsertId()
+	err = db.QueryRow("SELECT * FROM blog where post_id = ?",id).Scan(&data.Id,&data.Title,&data.Author,&data.Date,&data.Content)
+	if err != nil {
+		fmt.Println("Error in reading data : ",err)
+	}
+	c.JSON(http.StatusCreated, gin.H{"data" : data})
 }
 func main() {
 	db := getDBInstance().db
@@ -51,6 +80,7 @@ func main() {
 
 	r.GET("/post", GetAllPost)
 	r.GET("/post/:id", GetPostByID)
+	r.POST("/post", CreateNewPost)
 
 	r.Run(":8000")
 }
